@@ -26,13 +26,27 @@ export const sendMessageToGemini = async (
         ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
         { role: 'user', parts: [{ text: prompt }] }
       ],
-     },
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        tools: [{ googleSearch: {} }],
+      },
     });
 
     const text = response.text || "Desculpe, não consegui formular uma resposta no momento.";
     
-    // Como a pesquisa foi desativada, não haverá fontes externas dinâmicas
+    // Extrair fontes do grounding metadata se houver pesquisa
     const sources: GroundingSource[] = [];
+    
+    if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+      response.candidates[0].groundingMetadata.groundingChunks.forEach(chunk => {
+        if (chunk.web) {
+          sources.push({
+            uri: chunk.web.uri,
+            title: chunk.web.title || "Fonte Externa"
+          });
+        }
+      });
+    }
 
     return { text, sources };
 

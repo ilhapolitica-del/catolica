@@ -92,32 +92,32 @@ export const sendMessageToGemini = async (
     // Buscar fontes católicas confiáveis em paralelo
     const sourcesPromise = getCatholicSources(prompt);
     
-    // Preparar o conteúdo com histórico
-    const contents = history.map(h => ({
-      role: h.role,
+    // Construir o array de conteúdo com histórico
+    const contentArray = history.map(h => ({
+      role: h.role as 'user' | 'model',
       parts: [{ text: h.text }]
     }));
     
     // Adicionar a pergunta atual
-    contents.push({
+    contentArray.push({
       role: 'user' as const,
       parts: [{ text: prompt }]
     });
     
-    // Fazer a chamada para generateContent
+    // Fazer a chamada para generateContent com a estrutura correta
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents,
+      contents: contentArray,
       systemInstruction: SYSTEM_INSTRUCTION
     });
     
     // Extrair o texto da resposta
-    const text = response.text() || "Desculpe, não consegui formular uma resposta no momento.";
+    const textContent = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || "Desculpe, não consegui formular uma resposta no momento.";
     
     // Obter as fontes católicas
     const sources = await sourcesPromise;
     
-    return { text, sources };
+    return { text: textContent, sources };
   } catch (error) {
     console.error("Error communicating with Gemini:", error);
     throw error;

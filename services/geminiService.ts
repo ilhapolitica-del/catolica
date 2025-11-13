@@ -1,18 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 import { GroundingSource } from "../types";
 
-// Função segura para recuperar a chave de API em diferentes ambientes de build (Vite, CRA, etc)
+// Recupera a chave de API de forma segura, suportando tanto Node.js (process.env) 
+// quanto Vite/Vercel (import.meta.env) para garantir que a pesquisa funcione em produção.
 const getApiKey = (): string => {
-  // Verifica se está rodando em ambiente Vite (padrão Vercel para React moderno)
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env.VITE_API_KEY || import.meta.env.API_KEY || "";
+  // Tenta recuperar do ambiente Vite (padrão na Vercel para React)
+  // Devemos checar o import.meta antes do process para priorizar o build do frontend
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_KEY) {
+    return (import.meta as any).env.VITE_API_KEY;
   }
-  // Fallback para ambientes que usam process.env
-  try {
-    return process.env.REACT_APP_API_KEY || process.env.API_KEY || "";
-  } catch (e) {
-    return "";
+  // Tenta recuperar do ambiente padrão (Node/Next.js) ou fallback
+  if (typeof process !== 'undefined' && process.env?.API_KEY) {
+    return process.env.API_KEY;
   }
+  return '';
 };
 
 const apiKey = getApiKey();
@@ -34,9 +35,10 @@ export const sendMessageToGemini = async (
   history: { role: 'user' | 'model'; text: string }[] = []
 ): Promise<{ text: string; sources: GroundingSource[] }> => {
   try {
-    // Check if key is missing before calling to provide a clearer error
+    // Verifica se a chave está presente para evitar erros silenciosos ou requisições inúteis
     if (!apiKey) {
-      throw new Error("A chave de API não está configurada. Na Vercel, adicione a variável de ambiente 'VITE_API_KEY' com sua chave do Google AI Studio.");
+      console.error("API Key não encontrada. Verifique as variáveis de ambiente (VITE_API_KEY ou API_KEY).");
+      throw new Error("API Key missing");
     }
 
     const response = await ai.models.generateContent({

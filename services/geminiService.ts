@@ -46,7 +46,6 @@ const getCatholicSources = async (prompt: string): Promise<GroundingSource[]> =>
     const sources = [...RELIABLE_CATHOLIC_SOURCES];
     
     // Tenta buscar em DuckDuckGo Instant Answer (sem API key necessária)
-    // DuckDuckGo fornece resultados básicos sem restrição de API
     try {
       const encodedQuery = encodeURIComponent(`${prompt} site:vatican.va OR site:catholic.com OR site:catolicismo.com.br`);
       const ddgResponse = await fetch(
@@ -89,24 +88,35 @@ export const sendMessageToGemini = async (
     if (!apiKey) {
       throw new Error("A chave de API não está configurada (API_KEY missing). Configure as variáveis de ambiente no seu provedor de hospedagem.");
     }
-
+    
     // Buscar fontes católicas confiáveis em paralelo
     const sourcesPromise = getCatholicSources(prompt);
-
+    
+    // Preparar o conteúdo com histórico
+    const contents = history.map(h => ({
+      role: h.role,
+      parts: [{ text: h.text }]
+    }));
+    
+    // Adicionar a pergunta atual
+    contents.push({
+      role: 'user' as const,
+      parts: [{ text: prompt }]
+    });
+    
+    // Fazer a chamada para generateContent
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents: [
-        ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
-        { role: 'user', parts: [{ text: prompt }] }
-      ],
-      systemInstruction: SYSTEM_INSTRUCTION,
+      contents,
+      systemInstruction: SYSTEM_INSTRUCTION
     });
-
-    const text = response.text || "Desculpe, não consegui formular uma resposta no momento.";
+    
+    // Extrair o texto da resposta
+    const text = response.text() || "Desculpe, não consegui formular uma resposta no momento.";
     
     // Obter as fontes católicas
     const sources = await sourcesPromise;
-
+    
     return { text, sources };
   } catch (error) {
     console.error("Error communicating with Gemini:", error);

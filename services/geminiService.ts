@@ -15,6 +15,37 @@ Diretrizes:
 Se a pergunta não for sobre a fé, moral ou doutrina católica, redirecione gentilmente o usuário para o tema apropriado, relacionando-o com a visão católica se possível, ou decline educadamente.
 `;
 
+// Função para buscar no Google usando SerpAPI
+const searchGoogle = async (query: string): Promise<GroundingSource[]> => {
+  try {
+    const serpApiKey = process.env.SERP_API_KEY;
+    if (!serpApiKey) {
+      console.warn("SERP_API_KEY não configurada, retornando sem fontes");
+      return [];
+    }
+
+    const response = await fetch("https://serpapi.com/search", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }).then(r => r.json()).then((data: any) => {
+      if (data.organic_results) {
+        return data.organic_results.slice(0, 5).map((result: any) => ({
+          uri: result.link,
+          title: result.title
+        }));
+      }
+      return [];
+    }).catch(() => []);
+
+    return response;
+  } catch (error) {
+    console.error("Erro ao buscar no Google:", error);
+    return [];
+  }
+};
+
 export const sendMessageToGemini = async (
   prompt: string,
   history: { role: 'user' | 'model'; text: string }[] = []
@@ -24,6 +55,9 @@ export const sendMessageToGemini = async (
       throw new Error("A chave de API não está configurada (API_KEY missing). Configure as variáveis de ambiente no seu provedor de hospedagem.");
     }
 
+    // Buscar fontes no Google em paralelo
+    const sourcesPromise = searchGoogle(prompt + " doutrina católica");
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
       contents: [
@@ -31,27 +65,12 @@ export const sendMessageToGemini = async (
         { role: 'user', parts: [{ text: prompt }] }
       ],
       systemInstruction: SYSTEM_INSTRUCTION,
-      tools: [
-        {
-          googleSearch: {}
-        }
-      ],
     });
 
     const text = response.text || "Desculpe, não consegui formular uma resposta no momento.";
-    const sources: GroundingSource[] = [];
-
-    // Extrair fontes do grounding metadata
-    if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-      response.candidates[0].groundingMetadata.groundingChunks.forEach((chunk: any) => {
-        if (chunk.web?.uri && !sources.find(s => s.uri === chunk.web.uri)) {
-          sources.push({
-            uri: chunk.web.uri,
-            title: chunk.web.title || "Fonte Externa"
-          });
-        }
-      });
-    }
+    
+    // Obter as fontes da busca do Google
+    const sources = await sourcesPromise;
 
     return { text, sources };
   } catch (error) {

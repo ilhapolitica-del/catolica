@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { GroundingSource } from "../types";
 
-// Initialize the client. 
+// Initialize the client.
 // Note: process.env.API_KEY is handled by the bundler (Vite/Vercel).
 // We default to an empty string to prevent crash on initialization if missing,
 // allowing the UI to load. The error will be caught when trying to generate content.
@@ -30,35 +30,61 @@ export const sendMessageToGemini = async (
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [
         ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
         { role: 'user', parts: [{ text: prompt }] }
       ],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        tools: [{ googleSearch: {} }],
+        tools: [
+          {
+            googleSearch: {}
+          }
+        ],
+        toolConfig: {
+          functionCallingConfig: {
+            mode: 'AUTO'
+          }
+        }
       },
     });
 
     const text = response.text || "Desculpe, não consegui formular uma resposta no momento.";
-    
+
     // Extrair fontes do grounding metadata se houver pesquisa
     const sources: GroundingSource[] = [];
-    
-    if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-      response.candidates[0].groundingMetadata.groundingChunks.forEach(chunk => {
-        if (chunk.web) {
-          sources.push({
-            uri: chunk.web.uri,
-            title: chunk.web.title || "Fonte Externa"
-          });
-        }
-      });
+
+    // Verificar groundingMetadata na resposta
+    if (response.candidates && response.candidates.length > 0) {
+      const candidate = response.candidates[0];
+      
+      // Método 1: Tentar acessar groundingMetadata
+      if (candidate.groundingMetadata?.groundingChunks) {
+        candidate.groundingMetadata.groundingChunks.forEach((chunk: any) => {
+          if (chunk.web?.uri) {
+            sources.push({
+              uri: chunk.web.uri,
+              title: chunk.web.title || "Fonte Externa"
+            });
+          }
+        });
+      }
+
+      // Método 2: Tentar acessar groundingAttributions (alternativa)
+      if (candidate.groundingMetadata?.groundingAttributions) {
+        candidate.groundingMetadata.groundingAttributions.forEach((attr: any) => {
+          if (attr.web?.uri && !sources.find(s => s.uri === attr.web.uri)) {
+            sources.push({
+              uri: attr.web.uri,
+              title: attr.web.title || "Fonte Externa"
+            });
+          }
+        });
+      }
     }
 
     return { text, sources };
-
   } catch (error) {
     console.error("Error communicating with Gemini:", error);
     throw error;

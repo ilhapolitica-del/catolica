@@ -15,34 +15,69 @@ Diretrizes:
 Se a pergunta não for sobre a fé, moral ou doutrina católica, redirecione gentilmente o usuário para o tema apropriado, relacionando-o com a visão católica se possível, ou decline educadamente.
 `;
 
-// Função para buscar no Google usando SerpAPI
-const searchGoogle = async (query: string): Promise<GroundingSource[]> => {
+// Fontes católicas confiáveis que sempre retornamos
+const RELIABLE_CATHOLIC_SOURCES: GroundingSource[] = [
+  {
+    uri: "https://www.vatican.va/archive/catechism_po/index_po.html",
+    title: "Catecismo da Igreja Católica - Versão Official"
+  },
+  {
+    uri: "https://www.vatican.va/content/vatican/pt.html",
+    title: "Site Oficial do Vaticano"
+  },
+  {
+    uri: "https://www.vatican.va/archive/bible/nova_vulgata/documents/nova-vulgata_index_po.html",
+    title: "Bíblia Sagrada - Nova Vulgata do Vaticano"
+  },
+  {
+    uri: "https://www.cnbb.org.br",
+    title: "Conferência Nacional dos Bispos do Brasil (CNBB)"
+  },
+  {
+    uri: "https://www.catholic.com",
+    title: "Apologetics Institute - Catholic Resources"
+  }
+];
+
+// Função para buscar fontes católicas confiáveis
+const getCatholicSources = async (prompt: string): Promise<GroundingSource[]> => {
   try {
-    const serpApiKey = process.env.SERP_API_KEY;
-    if (!serpApiKey) {
-      console.warn("SERP_API_KEY não configurada, retornando sem fontes");
-      return [];
-    }
-
-    const response = await fetch("https://serpapi.com/search", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }).then(r => r.json()).then((data: any) => {
-      if (data.organic_results) {
-        return data.organic_results.slice(0, 5).map((result: any) => ({
-          uri: result.link,
-          title: result.title
-        }));
+    // Sempre retorna as fontes católicas de confiança
+    const sources = [...RELIABLE_CATHOLIC_SOURCES];
+    
+    // Tenta buscar em DuckDuckGo Instant Answer (sem API key necessária)
+    // DuckDuckGo fornece resultados básicos sem restrição de API
+    try {
+      const encodedQuery = encodeURIComponent(`${prompt} site:vatican.va OR site:catholic.com OR site:catolicismo.com.br`);
+      const ddgResponse = await fetch(
+        `https://api.duckduckgo.com/?q=${encodedQuery}&format=json&no_redirect=1`,
+        { method: 'GET', headers: { 'Accept': 'application/json' } }
+      ).then(r => r.json()).catch(() => ({}));
+      
+      // DuckDuckGo retorna ResultsObjects com Icon.URL, Title, FirstURL
+      if (ddgResponse.Results && Array.isArray(ddgResponse.Results)) {
+        ddgResponse.Results.slice(0, 3).forEach((result: any) => {
+          if (result.FirstURL && result.Title) {
+            // Verifica se não é duplicata
+            if (!sources.find(s => s.uri === result.FirstURL)) {
+              sources.push({
+                uri: result.FirstURL,
+                title: result.Title
+              });
+            }
+          }
+        });
       }
-      return [];
-    }).catch(() => []);
-
-    return response;
+    } catch (err) {
+      // Se DuckDuckGo falhar, apenas retorna as fontes de confiança
+      console.warn("DuckDuckGo search failed, using reliable sources only", err);
+    }
+    
+    return sources;
   } catch (error) {
-    console.error("Erro ao buscar no Google:", error);
-    return [];
+    console.error("Erro ao buscar fontes católicas:", error);
+    // Sempre retorna as fontes de confiança como fallback
+    return RELIABLE_CATHOLIC_SOURCES;
   }
 };
 
@@ -55,8 +90,8 @@ export const sendMessageToGemini = async (
       throw new Error("A chave de API não está configurada (API_KEY missing). Configure as variáveis de ambiente no seu provedor de hospedagem.");
     }
 
-    // Buscar fontes no Google em paralelo
-    const sourcesPromise = searchGoogle(prompt + " doutrina católica");
+    // Buscar fontes católicas confiáveis em paralelo
+    const sourcesPromise = getCatholicSources(prompt);
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
@@ -69,7 +104,7 @@ export const sendMessageToGemini = async (
 
     const text = response.text || "Desculpe, não consegui formular uma resposta no momento.";
     
-    // Obter as fontes da busca do Google
+    // Obter as fontes católicas
     const sources = await sourcesPromise;
 
     return { text, sources };

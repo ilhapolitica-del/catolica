@@ -1,13 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { GroundingSource } from "../types";
 
-// Ensure API key is present
-if (!process.env.API_KEY) {
-  console.error("API_KEY is missing from environment variables.");
-}
-
-// Initialize the client with the API key from the environment
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize the client. 
+// Note: process.env.API_KEY is handled by the bundler (Vite/Vercel).
+// We default to an empty string to prevent crash on initialization if missing,
+// allowing the UI to load. The error will be caught when trying to generate content.
+const apiKey = process.env.API_KEY || "";
+const ai = new GoogleGenAI({ apiKey });
 
 const SYSTEM_INSTRUCTION = `
 Você é um teólogo católico especialista e assistente pastoral. Seu objetivo é fornecer respostas precisas, caridosas e fiéis baseadas na Doutrina da Igreja Católica.
@@ -25,6 +24,11 @@ export const sendMessageToGemini = async (
   history: { role: 'user' | 'model'; text: string }[] = []
 ): Promise<{ text: string; sources: GroundingSource[] }> => {
   try {
+    // Check if key is missing before calling to provide a clearer error
+    if (!apiKey) {
+      throw new Error("A chave de API não está configurada (API_KEY missing). Configure as variáveis de ambiente no seu provedor de hospedagem.");
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [

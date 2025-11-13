@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message } from '../types';
-import { User, Sparkles, ExternalLink, AlertCircle } from 'lucide-react';
+import { User, Sparkles, ExternalLink, AlertCircle, Quote } from 'lucide-react';
 
 interface ChatMessageProps {
   message: Message;
@@ -41,6 +41,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
                   p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
                   ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-3" {...props} />,
                   ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-3" {...props} />,
+                  blockquote: ({node, ...props}) => (
+                    <div className="relative pl-5 py-2 my-4 border-l-4 border-amber-600 bg-amber-50/50 rounded-r-lg">
+                      <Quote className="absolute top-2 left-1 w-3 h-3 text-amber-300 -ml-4 opacity-50" />
+                      <blockquote className="italic text-stone-700 font-serif" {...props} />
+                    </div>
+                  ),
                 }}
               >
                 {message.text}

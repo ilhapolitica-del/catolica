@@ -26,9 +26,7 @@ export const sendMessageToGemini = async (
         ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
         { role: 'user', parts: [{ text: prompt }] }
       ],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
+     },
     });
 
     const text = response.text || "Desculpe, não consegui formular uma resposta no momento.";
